@@ -1,18 +1,3 @@
-<<<<<<< Updated upstream
-
-CXX = g++
-CXXFLAGS = -Wall -std=c++23
-TARGETS = main
-SRC_MAIN = ../src/main_server.cpp ../lib/libtslog.cpp
-
-all: $(TARGETS)
-
-main: $(SRC_MAIN)
-	$(CXX) $(CXXFLAGS) -o main $(SRC_MAIN)
-
-clean:
-	del $(TARGETS)
-=======
 # Makefile para Servidor de Chat TCP - libtslog (com limpeza automática de objetos)
 # Projeto: Programação Concorrente C++
 # Autor: Seu Nome
@@ -93,4 +78,3 @@ help:
 	@echo "  clean         - Remove executável, logs e objetos"
 	@echo "  clean-obj     - Remove apenas objetos"
 	@echo "  help          - Exibe esta ajuda"
->>>>>>> Stashed changes
