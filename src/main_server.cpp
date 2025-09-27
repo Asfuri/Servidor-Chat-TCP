@@ -10,8 +10,13 @@
 using namespace std;
 
 int main() {
+<<<<<<< Updated upstream
         libtslog logger;
         logger.initialize("chat_server.log");
+=======
+        ThreadSafeLogger logger;
+        logger.initialize("../chat_server.log");
+>>>>>>> Stashed changes
 
         // Simula múltiplas threads fazendo log
         std::vector<std::thread> threads;
