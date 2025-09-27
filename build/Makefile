@@ -1,8 +1,3 @@
-# Makefile para Servidor de Chat TCP - libtslog (com limpeza automática de objetos)
-# Projeto: Programação Concorrente C++
-# Autor: Seu Nome
-# Data: 26/09/2025
-
 # ==============================================================================
 # CONFIGURAÇÕES DO COMPILADOR
 # ==============================================================================
