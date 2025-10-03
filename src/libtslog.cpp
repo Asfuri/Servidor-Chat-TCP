@@ -52,7 +52,8 @@ void ThreadSafeLogger::logWriterFunc() {
 }
 
 void ThreadSafeLogger::shutdown() {
-        if (!running) return;
+        if (!running)
+                return;
         running = false;
         logCondition.notify_all();
 

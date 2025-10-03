@@ -1,10 +1,10 @@
 #include "../lib/libtslog.h"
+#include <algorithm>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
-#include <algorithm>
 
 class TCPChatServer {
 private:
@@ -32,7 +32,7 @@ public:
                 serverAddr.sin_port = htons(port);
 
                 // Bind e Listen
-                bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
+                bind(serverSocket, (sockaddr *)&serverAddr, sizeof(serverAddr));
                 listen(serverSocket, 5);
 
                 logger.log("Servidor ouvindo conexões...");
@@ -41,7 +41,7 @@ public:
                 while (true) {
                         sockaddr_in clientAddr;
                         socklen_t clientLen = sizeof(clientAddr);
-                        int clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientLen);
+                        int clientSocket = accept(serverSocket, (sockaddr *)&clientAddr, &clientLen);
 
                         if (clientSocket > 0) {
                                 logger.log("Cliente conectado: " + std::to_string(clientSocket));
@@ -83,18 +83,19 @@ public:
                 close(clientSocket);
         }
 
-        void broadcastMessage(const std::string& message, int senderSocket) {
+        void broadcastMessage(std::string message, int senderSocket) {
+                while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
+                        message.pop_back();
+                }
+                std::string full = "Cliente " + std::to_string(senderSocket) + ": " + message + "\n";
+
                 std::lock_guard<std::mutex> lock(clientsMutex);
-
-                std::string fullMessage = "Cliente " + std::to_string(senderSocket) + ": " + message;
-
-                for (int socket : clientSockets) {
-                        if (socket != senderSocket) {
-                                send(socket, fullMessage.c_str(), fullMessage.length(), 0);
+                for (int sock : clientSockets) {
+                        if (sock != senderSocket) {
+                                send(sock, full.data(), full.size(), 0);
                         }
                 }
-
-                logger.log("Mensagem retransmitida: " + fullMessage);
+                logger.log("Mensagem retransmitida: " + full); // full já tem \n, mas logger usa std::endl
         }
 
         void removeClient(int clientSocket) {

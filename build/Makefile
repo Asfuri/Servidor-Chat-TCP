@@ -200,11 +200,11 @@ stress-test: $(TCP_SERVER) $(TCP_CLIENT) setup
 	@echo "⚡ TESTE DE STRESS - 10 clientes simultâneos"
 	@echo "📁 Logs em: $(LOG_DIR)/stress/"
 	@mkdir -p $(LOG_DIR)/stress
-	@./$(TCP_SERVER) > $(LOG_DIR)/stress/server.log 2>&1 & echo $$! > $(LOG_DIR)/stress/server.pid
+	@./$(TCP_SERVER) & echo $$! > $(LOG_DIR)/stress/server.pid
 	@sleep 2
 	@for i in $$(seq 1 10); do \
 		echo "🚀 Cliente $$i conectando..."; \
-		(echo "Cliente $$i - Mensagem 1"; sleep 0.5; echo "Cliente $$i - Mensagem 2"; sleep 0.5; echo "sair") | ./$(TCP_CLIENT) > $(LOG_DIR)/stress/client_$$i.log 2>&1 & \
+		(sleep 1; echo "Cliente $$i - Mensagem 1"; sleep 0.5; echo "Cliente $$i - Mensagem 2"; sleep 0.5; echo "sair") | ./$(TCP_CLIENT) 127.0.0.1 8080 > $(LOG_DIR)/stress/client_$$i.log 2>&1 & \
 	done
 	@sleep 8
 	@if [ -f $(LOG_DIR)/stress/server.pid ]; then \

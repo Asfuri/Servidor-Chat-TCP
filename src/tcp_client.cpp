@@ -1,14 +1,15 @@
-#include "../lib/libtslog.h"
 #include <arpa/inet.h>
-#include <cstring>
 #include <iostream>
+#include <mutex>
 #include <netinet/in.h>
 #include <string>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
 
-static ThreadSafeLogger logger;
+// Mutex global para proteger std::cout
+static std::mutex coutMutex;
+
 class TCPChatClient {
 private:
         int clientSocket;
@@ -16,7 +17,8 @@ private:
         int serverPort;
 
 public:
-        TCPChatClient(const std::string& ip = "127.0.0.1", int port = 8080) : serverIP(ip), serverPort(port) {
+        TCPChatClient(const std::string &ip = "127.0.0.1", int port = 8080)
+            : serverIP(ip), serverPort(port) {
         }
 
         bool connect() {
@@ -27,13 +29,18 @@ public:
                 serverAddr.sin_port = htons(serverPort);
                 inet_pton(AF_INET, serverIP.c_str(), &serverAddr.sin_addr);
 
-                if (::connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+                if (::connect(clientSocket, (sockaddr *)&serverAddr, sizeof(serverAddr)) <
+                    0) {
+                        std::lock_guard<std::mutex> lock(coutMutex);
                         std::cerr << "Erro ao conectar ao servidor" << std::endl;
-                        logger.log("Erro ao conectar ao servidor: " + std::string(strerror(errno)));
                         return false;
                 }
-                logger.log("Conectado ao servidor " + serverIP + ":" + std::to_string(serverPort));
-                std::cout << "Conectado ao servidor " << serverIP << ":" << serverPort << std::endl;
+
+                {
+                        std::lock_guard<std::mutex> lock(coutMutex);
+                        std::cout << "Conectado ao servidor " << serverIP << ":" << serverPort
+                                  << std::endl;
+                }
 
                 // Iniciar thread para receber mensagens
                 std::thread receiveThread(&TCPChatClient::receiveMessages, this);
@@ -43,25 +50,40 @@ public:
         }
 
         void receiveMessages() {
-                char buffer[1024];
-
+                std::string acc;
+                char buf[1024];
                 while (true) {
-                        int bytesRead = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
-
-                        if (bytesRead <= 0) {
+                        int n = recv(clientSocket, buf, sizeof(buf), 0);
+                        if (n <= 0) {
+                                std::lock_guard<std::mutex> lock(coutMutex);
                                 std::cout << "Desconectado do servidor" << std::endl;
                                 break;
                         }
+                        acc.append(buf, n);
 
-                        buffer[bytesRead] = '\0';
-                        logger.log("Mensagem recebida: " + std::string(buffer));
-                        std::cout << buffer << std::endl;
+                        size_t pos;
+                        while ((pos = acc.find('\n')) != std::string::npos) {
+                                std::string line = acc.substr(0, pos);
+                                acc.erase(0, pos + 1);
+
+                                // opcional: remover \r
+                                if (!line.empty() && line.back() == '\r')
+                                        line.pop_back();
+
+                                // evita imprimir linhas vazias quando há \n\n
+                                if (!line.empty()) {
+                                        std::lock_guard<std::mutex> lock(coutMutex);
+                                        std::cout << line << std::endl;
+                                }
+                        }
                 }
         }
 
-        void sendMessage(const std::string& message) {
-                send(clientSocket, message.c_str(), message.length(), 0);
-                logger.log("Enviado ao servidor: " + message);
+        void sendMessage(const std::string &message) {
+                std::string out = message;
+                if (out.empty() || out.back() != '\n')
+                        out.push_back('\n');
+                send(clientSocket, out.data(), out.size(), 0);
         }
 
         void start() {
@@ -69,7 +91,10 @@ public:
                         return;
 
                 std::string message;
-                std::cout << "Digite mensagens (ou 'sair' para encerrar):" << std::endl;
+                {
+                        std::lock_guard<std::mutex> lock(coutMutex);
+                        std::cout << "Digite mensagens (ou 'sair' para encerrar):" << std::endl;
+                }
 
                 while (true) {
                         std::getline(std::cin, message);
@@ -85,9 +110,7 @@ public:
         }
 };
 
-int main(int argc, char* argv[]) {
-        logger.initialize("logs/client.log");
-        logger.log("Cliente iniciando");
+int main(int argc, char *argv[]) {
         std::string serverIP = "127.0.0.1";
         int serverPort = 8080;
 
@@ -98,6 +121,6 @@ int main(int argc, char* argv[]) {
 
         TCPChatClient client(serverIP, serverPort);
         client.start();
-        logger.log("Cliente encerrando");
-        logger.shutdown();
+
+        return 0;
 }

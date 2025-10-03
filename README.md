@@ -1,106 +1,146 @@
-# Servidor de Chat Multiusuário TCP - Etapa 1
+# Servidor de Chat Multiusuário TCP - Etapa 2
 
 ## 📖 Sobre o Projeto
 
-Este projeto implementa um **Servidor de Chat Multiusuário TCP** desenvolvido em C++ como trabalho final da disciplina de Programação Concorrente. O sistema demonstra o domínio prático de conceitos fundamentais de programação concorrente, incluindo:
+Este projeto implementa um **Servidor de Chat Multiusuário TCP** desenvolvido em C++ como trabalho final da disciplina de Programação Concorrente. O sistema demonstra o domínio prático de conceitos fundamentais de programação concorrente, incluindo threads, exclusão mútua com mutexes, variáveis de condição e sockets TCP.
 
-- 🧵 **Threads** e gerenciamento de concorrência
-- 🔒 **Exclusão mútua** com mutexes
-- 📢 **Variáveis de condição** para sincronização
-- 🛡️ **Monitores** para proteção de estruturas compartilhadas
-- 🌐 **Sockets TCP** para comunicação em rede
-
-### 🎯 Objetivos do Sistema Completo
-
-O projeto será desenvolvido em 3 etapas:
+### 🎯 Roadmap do Projeto
 
 1. **Etapa 1** ✅ - Arquitetura + biblioteca libtslog thread-safe
-2. **Etapa 2** 🚧 - Protótipo CLI com comunicação TCP básica
-3. **Etapa 3** 🔜 - Sistema completo cliente/servidor com broadcasting
+2. **Etapa 2** ✅ - Protótipo CLI com comunicação TCP básica
+3. **Etapa 3** 🔜 - Sistema completo com monitores e broadcasting otimizado
 
-## 🏗️ Arquitetura Atual (Etapa 1)
+## ✨ O Que Há de Novo na Etapa 2
 
-### 📚 Biblioteca libtslog
+Nesta etapa, o projeto evoluiu de um simples teste de logging para um protótipo de cliente/servidor TCP funcional. As principais implementações foram:
 
-A **libtslog** é uma biblioteca de logging thread-safe personalizada que implementa o padrão **Producer-Consumer**:
+- **Servidor TCP Concorrente (`tcp_server`)**: Aceita múltiplas conexões de clientes simultaneamente, criando uma thread dedicada para cada um.
+- **Cliente CLI (`tcp_client`)**: Uma interface de linha de comando que permite aos usuários conectar ao servidor, enviar e receber mensagens em tempo real.
+- **Broadcasting de Mensagens**: O servidor retransmite as mensagens recebidas para todos os outros clientes conectados, criando uma sala de chat.
+- **Sistema de Logs Organizado**: Os logs agora são salvos em um diretório dedicado `logs/`, com arquivos separados para o servidor, cliente e testes.
+- **Makefile Avançado**: Novos alvos para compilar, executar e testar o sistema de forma automatizada e organizada.
 
-- ✅ **Thread-Safe**: Múltiplas threads podem fazer log simultaneamente
-- 🎯 **Eficiente**: Buffer interno com thread dedicada para escrita
-- 🔄 **Padrão Producer-Consumer**: Otimiza I/O de arquivo
-- ⚡ **Controle de Overflow**: Limita buffer a 1000 entradas
-
-### 📊 Diagramas e Documentação Visual
-
-Os diagramas foram gerados para facilitar o entendimento da arquitetura e dos fluxos de execução:
-
-### Diagrama de Classes (UML)
-![Diagrama de Classes](img/diagrama-classes.png)
-
-### Diagrama de Sequência
-![Diagrama de Sequência](img/diagrama-sequencia.png)
-
-### Fluxograma da Thread Escritora
-![Fluxograma da Thread Escritora](img/fluxograma-logger.png)
-
-Visualize-os para compreender a estrutura das classes, a interação entre threads e o algoritmo de processamento de logs.
 
 ## 📁 Estrutura do Projeto
 
+A estrutura foi reorganizada para acomodar os novos componentes:
+
 ```
-Servidor-de-Chat/
-├── 📂 img/                    # Diagramas e documentação visual
+Servidor-Chat-TCP/
+├── 📂 build/
+│   ├── 📁 obj/
+│   ├── 📁 logs/
+│   └── Makefile
+├── 📂 lib/
+│   ├── libtslog.h
+│   └── logEntry.h
+├── 📂 src/
+│   ├── libtslog.cpp
+│   ├── tcp_server.cpp
+│   ├── tcp_client.cpp
+│   └── test_libtslog.cpp
+├── 📂 img/
 │   ├── diagrama-classes.png
 │   ├── diagrama-sequencia.png
 │   └── fluxograma-logger.png
-├── 📂 build/                  # Makefile e executáveis
-│   ├── Makefile
-│   └── chat_server            # Executável gerado
-├── 📂 lib/                    # Arquivos de cabeçalho
-│   ├── libtslog.h
-│   └── logEntry.h
-├── 📂 src/                    # Código fonte
-│   ├── libtslog.cpp
-│   └── main_server.cpp
-├── 📄 README.md               # Este arquivo
-├── 📄 chat_server.log         # Arquivo de log gerado
+└── 📄 README.md
 └── 📄 .gitignore
 ```
+
 
 ## 🚀 Como Compilar e Executar
 
 ### 📋 Pré-requisitos
 
 - **Compilador**: g++ com suporte a C++17 ou superior
-- **Sistema**: Linux/Unix (testado em Ubuntu)
-- **Dependências**: pthread (normalmente já incluída)
+- **Sistema**: Linux/Unix
+- **Dependências**: `pthread`
+
 
 ### 🔨 Compilação
 
-```bash
-cd Servidor-de-Chat/build/
-make
-```
-
-### ▶️ Execução
+Navegue até o diretório `build` e execute `make` para compilar todos os executáveis.
 
 ```bash
-make run
+cd build/
+make all
 ```
 
-Verifique o arquivo `chat_server.log` gerado.
 
-## 🔧 API da libtslog
+### ▶️ Execução Manual
 
-```cpp
-ThreadSafeLogger logger;
-logger.initialize("arquivo.log");
-logger.log("Sua mensagem aqui");
-logger.shutdown();
+1. **Inicie o Servidor** (em um terminal):
+
+```bash
+make run-server
 ```
 
-## 🚧 Próximas Etapas
+O servidor iniciará na porta 8080 e os logs serão salvos em `logs/server.log`.
+2. **Inicie o Cliente** (em outro terminal):
 
-- **Etapa 2**: Servidor TCP e cliente CLI básicos
-- **Etapa 3**: Broadcasting, gerenciamento de clientes e relatório final
+```bash
+make run-client
+```
 
----
+O cliente se conectará a `localhost:8080`. Os logs do cliente são salvos em `logs/client.log`. Abra múltiplos terminais e execute este comando para simular vários usuários.
+
+### Cliente customizado
+
+```bash
+make run-client-custom SERVER_IP=IP SERVER_PORT=PORT
+```
+
+### 🧪 Testes Automatizados
+
+O Makefile oferece alvos para testes automatizados que facilitam a verificação da funcionalidade.
+
+- **Teste Básico de Conexão (`test-tcp`)**:
+
+```bash
+make test-tcp
+```
+
+Este comando inicia o servidor, conecta 3 clientes, envia mensagens, encerra as conexões e exibe um resumo dos logs gerados.
+- **Teste de Stress (`stress-test`)**:
+
+```bash
+make stress-test
+```
+
+Simula 10 clientes conectando e enviando mensagens simultaneamente para verificar a robustez do servidor sob carga. Os logs deste teste são salvos em `logs/stress/`.
+
+
+## 📊 Gerenciamento de Logs
+
+Com a nova estrutura, os logs estão mais organizados e fáceis de analisar.
+
+- **Ver Resumo dos Logs**:
+
+```bash
+make logs-summary
+```
+
+Exibe um resumo de todos os arquivos `.log` na pasta `logs/`, incluindo tamanho e número de linhas.
+- **Monitorar Logs em Tempo Real**:
+
+```bash
+make logs-tail
+```
+
+Monitora o arquivo `logs/server.log` em tempo real, útil para depuração.
+- **Limpar Logs**:
+
+```bash
+make clean-logs
+```
+
+Remove todos os arquivos de log da pasta `logs/` sem apagar os executáveis.
+
+
+## 🚧 Próximas Etapas (Etapa 3)
+
+- Refinar o gerenciamento de clientes com estruturas de dados mais robustas (monitores).
+- Implementar tratamento de erros mais detalhado.
+- Adicionar comandos no chat.
+- Elaborar o relatório final de análise de concorrência.
+
