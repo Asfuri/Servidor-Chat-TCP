@@ -54,3 +54,8 @@
 
 build/chat_server
 build/main
+build/logs
+build/tcp_server
+build/tcp_client
+build/test_libtslog
+build/obj

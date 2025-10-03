@@ -11,7 +11,7 @@ using namespace std;
 
 int main() {
         ThreadSafeLogger logger;
-        logger.initialize("../chat_server.log");
+        logger.initialize("logs/chat_server.log");
 
         // Simula múltiplas threads fazendo log
         std::vector<std::thread> threads;
