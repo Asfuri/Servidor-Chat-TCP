@@ -1,4 +1,6 @@
+#include "../lib/libtslog.h"
 #include <arpa/inet.h>
+#include <cstring>
 #include <iostream>
 #include <netinet/in.h>
 #include <string>
@@ -6,6 +8,7 @@
 #include <thread>
 #include <unistd.h>
 
+static ThreadSafeLogger logger;
 class TCPChatClient {
 private:
         int clientSocket;
@@ -26,9 +29,10 @@ public:
 
                 if (::connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
                         std::cerr << "Erro ao conectar ao servidor" << std::endl;
+                        logger.log("Erro ao conectar ao servidor: " + std::string(strerror(errno)));
                         return false;
                 }
-
+                logger.log("Conectado ao servidor " + serverIP + ":" + std::to_string(serverPort));
                 std::cout << "Conectado ao servidor " << serverIP << ":" << serverPort << std::endl;
 
                 // Iniciar thread para receber mensagens
@@ -50,12 +54,14 @@ public:
                         }
 
                         buffer[bytesRead] = '\0';
+                        logger.log("Mensagem recebida: " + std::string(buffer));
                         std::cout << buffer << std::endl;
                 }
         }
 
         void sendMessage(const std::string& message) {
                 send(clientSocket, message.c_str(), message.length(), 0);
+                logger.log("Enviado ao servidor: " + message);
         }
 
         void start() {
@@ -80,6 +86,8 @@ public:
 };
 
 int main(int argc, char* argv[]) {
+        logger.initialize("logs/client.log");
+        logger.log("Cliente iniciando");
         std::string serverIP = "127.0.0.1";
         int serverPort = 8080;
 
@@ -90,4 +98,6 @@ int main(int argc, char* argv[]) {
 
         TCPChatClient client(serverIP, serverPort);
         client.start();
+        logger.log("Cliente encerrando");
+        logger.shutdown();
 }

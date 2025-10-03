@@ -1,6 +1,5 @@
 #include "../lib/libtslog.h"
 #include <cstring>
-#include <iostream>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <thread>

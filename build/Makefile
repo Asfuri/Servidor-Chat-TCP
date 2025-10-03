@@ -1,4 +1,4 @@
-# Makefile para Servidor de Chat TCP - Etapa 2 (com pasta de logs)
+# Makefile para Servidor de Chat TCP - Etapa 2 (com pasta de logs) - CORRIGIDO
 # Projeto: Programação Concorrente C++
 # Data: 03/10/2025
 
@@ -73,7 +73,7 @@ $(TCP_SERVER): $(LIBTSLOG_OBJ) $(TCP_SERVER_OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 # Cliente CLI de Chat
-$(TCP_CLIENT): $(TCP_CLIENT_OBJ)
+$(TCP_CLIENT): $(LIBTSLOG_OBJ) $(TCP_CLIENT_OBJ)
 	@echo "🔗 Linkando cliente TCP: $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
@@ -164,11 +164,16 @@ test-tcp: $(TCP_SERVER) $(TCP_CLIENT) setup
 	@echo "📁 Logs em: $(LOG_DIR)/"
 	@echo "📡 Iniciando servidor em background..."
 	@./$(TCP_SERVER) & echo $$! > $(LOG_DIR)/server.pid
-	@sleep 2
-	@echo "👥 Testando múltiplos clientes..."
+	@sleep 1
+	@echo "👥 Conectando múltiplos clientes..."
 	@for i in 1 2 3; do \
-		echo "🤖 Cliente $$i: enviando mensagem de teste"; \
-		(echo "Mensagem automatica do cliente $$i"; sleep 1; echo "sair") | ./$(TCP_CLIENT) localhost 8080 > $(LOG_DIR)/client_$$i.log 2>&1 & \
+		echo "🤖 Cliente $$i: conectando..."; \
+		( \
+			sleep 2; \
+			echo "Mensagem automática do cliente $$i"; \
+			sleep 1; \
+			echo "sair" \
+		) | ./$(TCP_CLIENT) 127.0.0.1 8080 > $(LOG_DIR)/client_$$i.log 2>&1 & \
 	done
 	@sleep 5
 	@echo "🛑 Parando servidor..."
@@ -181,13 +186,14 @@ test-tcp: $(TCP_SERVER) $(TCP_CLIENT) setup
 		echo "✅ Logs do servidor ($(SERVER_LOG)):"; \
 		echo "   Linhas: $$(wc -l < $(SERVER_LOG))"; \
 		echo "   Conexões: $$(grep -c 'conectado' $(SERVER_LOG) 2>/dev/null || echo 0)"; \
-		echo "   Mensagens: $$(grep -c 'Recebido' $(SERVER_LOG) 2>/dev/null || echo 0)"; \
+		echo "   Mensagens: $$(grep -c 'Mensagem recebida' $(SERVER_LOG) 2>/dev/null || echo 0)"; \
+		echo "   Retransmissões: $$(grep -c 'Mensagem retransmitida' $(SERVER_LOG) 2>/dev/null || echo 0)"; \
 	else \
 		echo "❌ Arquivo $(SERVER_LOG) não encontrado"; \
 	fi
 	@echo "📁 Todos os logs em: $(LOG_DIR)/"
 	@ls -la $(LOG_DIR)/
-	@echo "✅ Teste TCP concluído"
+
 
 # Teste de stress com logs organizados
 stress-test: $(TCP_SERVER) $(TCP_CLIENT) setup
@@ -208,7 +214,7 @@ stress-test: $(TCP_SERVER) $(TCP_CLIENT) setup
 	@echo "📊 Resultado do stress test:"
 	@if [ -f $(LOG_DIR)/stress/server.log ]; then \
 		echo "   Conexões aceitas: $$(grep -c 'conectado' $(LOG_DIR)/stress/server.log 2>/dev/null || echo 0)"; \
-		echo "   Mensagens processadas: $$(grep -c 'Recebido' $(LOG_DIR)/stress/server.log 2>/dev/null || echo 0)"; \
+		echo "   Mensagens processadas: $$(grep -c 'Mensagem recebida' $(LOG_DIR)/stress/server.log 2>/dev/null || echo 0)"; \
 		echo "   Desconexões: $$(grep -c 'desconectado' $(LOG_DIR)/stress/server.log 2>/dev/null || echo 0)"; \
 	fi
 	@echo "📁 Logs detalhados em: $(LOG_DIR)/stress/"
@@ -311,6 +317,24 @@ check: setup
 		if [ -f $(SRC_DIR)/$$file ]; then echo "✅ $(SRC_DIR)/$$file"; else echo "⚠️  $(SRC_DIR)/$$file (criar)"; fi; \
 	done
 
+# Comando para debuggar logs
+debug-logs: setup
+	@echo "🔍 DEBUG - Analisando logs detalhadamente..."
+	@if [ -f $(SERVER_LOG) ]; then \
+		echo "📄 Conteúdo do $(SERVER_LOG):"; \
+		echo "====================================="; \
+		cat $(SERVER_LOG); \
+		echo "====================================="; \
+		echo "📊 Análise de padrões:"; \
+		echo "   Linhas totais: $$(wc -l < $(SERVER_LOG))"; \
+		echo "   'conectado': $$(grep -c 'conectado' $(SERVER_LOG) 2>/dev/null || echo 0)"; \
+		echo "   'Mensagem recebida': $$(grep -c 'Mensagem recebida' $(SERVER_LOG) 2>/dev/null || echo 0)"; \
+		echo "   'Mensagem retransmitida': $$(grep -c 'Mensagem retransmitida' $(SERVER_LOG) 2>/dev/null || echo 0)"; \
+		echo "   'desconectado': $$(grep -c 'desconectado' $(SERVER_LOG) 2>/dev/null || echo 0)"; \
+	else \
+		echo "❌ Arquivo $(SERVER_LOG) não encontrado"; \
+	fi
+
 # ==============================================================================
 # INFORMAÇÕES E AJUDA
 # ==============================================================================
@@ -353,6 +377,7 @@ help:
 	@echo "📊 LOGS:"
 	@echo "  logs-summary     - Resumo de todos os logs"
 	@echo "  logs-tail        - Monitora logs em tempo real"
+	@echo "  debug-logs       - Análise detalhada dos logs"
 	@echo "  clean-logs       - Remove apenas logs"
 	@echo ""
 	@echo "🧹 LIMPEZA:"
@@ -368,7 +393,7 @@ help:
 # ==============================================================================
 # REGRAS ESPECIAIS
 # ==============================================================================
-.PHONY: all setup clean clean-obj clean-logs clean-all run-test run-server run-client run-client-custom test-tcp stress-test logs-summary logs-tail debug check info help
+.PHONY: all setup clean clean-obj clean-logs clean-all run-test run-server run-client run-client-custom test-tcp stress-test logs-summary logs-tail debug-logs debug check info help
 
 # Não remove objetos intermediários automaticamente
 .SECONDARY: $(LIBTSLOG_OBJ) $(TEST_LIBTSLOG_OBJ) $(TCP_SERVER_OBJ) $(TCP_CLIENT_OBJ)
