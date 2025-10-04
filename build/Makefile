@@ -12,6 +12,7 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -pthread
 # ESTRUTURA DE DIRETÓRIOS
 # ==============================================================================
 SRC_DIR = ../src
+SCRIPTS_DIR = ../scripts
 LIB_DIR = ../lib
 OBJ_DIR = obj
 LOG_DIR = logs
@@ -20,9 +21,10 @@ BUILD_DIR = .
 # ==============================================================================
 # ARQUIVOS E ALVOS
 # ==============================================================================
-HEADERS = $(LIB_DIR)/libtslog.h $(LIB_DIR)/logEntry.h
+HEADERS = $(LIB_DIR)/libtslog.h $(LIB_DIR)/logEntry.h $(LIB_DIR)/message_history.h
 
 # Executáveis
+SYNC_TEST = test_sync_clients
 TEST_LIBTSLOG = test_libtslog
 TCP_SERVER = tcp_server
 TCP_CLIENT = tcp_client
@@ -30,8 +32,10 @@ TCP_CLIENT = tcp_client
 # Arquivos objeto
 LIBTSLOG_OBJ = $(OBJ_DIR)/libtslog.o
 TEST_LIBTSLOG_OBJ = $(OBJ_DIR)/test_libtslog.o
+SYNC_TEST_OBJ = $(OBJ_DIR)/test_sync_clients.o
 TCP_SERVER_OBJ = $(OBJ_DIR)/tcp_server.o
 TCP_CLIENT_OBJ = $(OBJ_DIR)/tcp_client.o
+MESSAGE_HISTORY_OBJ = $(OBJ_DIR)/message_history.o
 
 # Arquivos de log na pasta logs/
 TEST_LOG = $(LOG_DIR)/chat_server.log
@@ -62,13 +66,18 @@ setup:
 # COMPILAÇÃO DOS EXECUTÁVEIS
 # ==============================================================================
 
-# Teste da biblioteca libtslog (antigo main_server.cpp)
+# Teste da biblioteca libtslog
 $(TEST_LIBTSLOG): $(LIBTSLOG_OBJ) $(TEST_LIBTSLOG_OBJ)
 	@echo "🔗 Linkando teste da libtslog: $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
+# Compilar teste sincronizado
+$(SYNC_TEST): $(SYNC_TEST_OBJ)
+	@echo "🔗 Linkando teste sincronizado: $@"
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
 # Servidor TCP de Chat
-$(TCP_SERVER): $(LIBTSLOG_OBJ) $(TCP_SERVER_OBJ)
+$(TCP_SERVER): $(LIBTSLOG_OBJ) $(MESSAGE_HISTORY_OBJ) $(TCP_SERVER_OBJ)
 	@echo "🔗 Linkando servidor TCP: $@"
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
@@ -99,6 +108,14 @@ $(TCP_SERVER_OBJ): $(SRC_DIR)/tcp_server.cpp $(HEADERS) | setup
 # Cliente TCP
 $(TCP_CLIENT_OBJ): $(SRC_DIR)/tcp_client.cpp | setup
 	@echo "🔨 Compilando cliente TCP: $<"
+	$(CXX) $(CXXFLAGS) -I$(LIB_DIR) -c $< -o $@
+
+$(MESSAGE_HISTORY_OBJ): $(SRC_DIR)/message_history.cpp $(LIB_DIR)/message_history.h | setup
+	@echo "🔨 Compilando histórico de mensagens: $<"
+	$(CXX) $(CXXFLAGS) -I$(LIB_DIR) -c $< -o $@
+
+$(SYNC_TEST_OBJ): $(SCRIPTS_DIR)/test_sync_clients.cpp | setup
+	@echo "🔨 Compilando teste sincronizado: $<"
 	$(CXX) $(CXXFLAGS) -I$(LIB_DIR) -c $< -o $@
 
 # ==============================================================================
@@ -196,29 +213,23 @@ test-tcp: $(TCP_SERVER) $(TCP_CLIENT) setup
 
 
 # Teste de stress com logs organizados
-stress-test: $(TCP_SERVER) $(TCP_CLIENT) setup
-	@echo "⚡ TESTE DE STRESS - 10 clientes simultâneos"
-	@echo "📁 Logs em: $(LOG_DIR)/stress/"
-	@mkdir -p $(LOG_DIR)/stress
-	@./$(TCP_SERVER) & echo $$! > $(LOG_DIR)/stress/server.pid
-	@sleep 2
-	@for i in $$(seq 1 10); do \
-		echo "🚀 Cliente $$i conectando..."; \
-		(sleep 1; echo "Cliente $$i - Mensagem 1"; sleep 0.5; echo "Cliente $$i - Mensagem 2"; sleep 0.5; echo "sair") | ./$(TCP_CLIENT) 127.0.0.1 8080 > $(LOG_DIR)/stress/client_$$i.log 2>&1 & \
-	done
-	@sleep 8
-	@if [ -f $(LOG_DIR)/stress/server.pid ]; then \
-		kill `cat $(LOG_DIR)/stress/server.pid` 2>/dev/null || true; \
-		rm -f $(LOG_DIR)/stress/server.pid; \
+stress-test: $(TCP_SERVER) $(SYNC_TEST) setup
+	@echo "⚡ Teste com SINCRONIZAÇÃO via Barrier (condition_variable)"
+	@echo "📁 Logs em: $(LOG_DIR)/"
+	@./$(TCP_SERVER) > $(LOG_DIR)/server_sync.log 2>&1 & echo $$! > $(LOG_DIR)/server.pid
+	@sleep 1  # Apenas para servidor subir
+	@echo "👥 Iniciando clientes sincronizados..."
+	./$(SYNC_TEST) 5  # 5 clientes com barrier (SEM SLEEP - usa barreiras!)
+	@if [ -f $(LOG_DIR)/server.pid ]; then \
+		kill `cat $(LOG_DIR)/server.pid` 2>/dev/null || true; \
+		rm -f $(LOG_DIR)/server.pid; \
 	fi
-	@echo "📊 Resultado do stress test:"
-	@if [ -f $(LOG_DIR)/stress/server.log ]; then \
-		echo "   Conexões aceitas: $$(grep -c 'conectado' $(LOG_DIR)/stress/server.log 2>/dev/null || echo 0)"; \
-		echo "   Mensagens processadas: $$(grep -c 'Mensagem recebida' $(LOG_DIR)/stress/server.log 2>/dev/null || echo 0)"; \
-		echo "   Desconexões: $$(grep -c 'desconectado' $(LOG_DIR)/stress/server.log 2>/dev/null || echo 0)"; \
+	@echo "📊 Resultado:"
+	@if [ -f $(SERVER_LOG) ]; then \
+		echo "   Conexões: $$(grep -c 'conectado' $(SERVER_LOG))"; \
+		echo "   Mensagens: $$(grep -c 'Mensagem recebida' $(SERVER_LOG))"; \
 	fi
-	@echo "📁 Logs detalhados em: $(LOG_DIR)/stress/"
-	@ls -la $(LOG_DIR)/stress/
+	@echo "✅ Teste sincronizado concluído"
 
 # ==============================================================================
 # ANÁLISE DE LOGS

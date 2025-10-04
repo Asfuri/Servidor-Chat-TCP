@@ -59,3 +59,4 @@ build/tcp_server
 build/tcp_client
 build/test_libtslog
 build/obj
+build/test_sync_clients

@@ -1,5 +1,7 @@
+#include "../lib/socket_guard.h"
 #include <arpa/inet.h>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <netinet/in.h>
 #include <string>
@@ -12,25 +14,44 @@ static std::mutex coutMutex;
 
 class TCPChatClient {
 private:
-        int clientSocket;
+        std::unique_ptr<SocketGuard> clientSocket; // Smart pointer para socket
         std::string serverIP;
         int serverPort;
+        bool running;
+        std::unique_ptr<std::thread> receiveThread; // Smart pointer para thread
 
 public:
-        TCPChatClient(const std::string &ip = "127.0.0.1", int port = 8080)
-            : serverIP(ip), serverPort(port) {
+        TCPChatClient(const std::string& ip = "127.0.0.1", int port = 8080)
+            : serverIP(ip), serverPort(port), running(false) {
+        }
+
+        ~TCPChatClient() {
+                running = false;
+
+                // Aguardar thread terminar
+                if (receiveThread && receiveThread->joinable()) {
+                        receiveThread->join();
+                }
+
+                // Socket fecha automaticamente via RAII
         }
 
         bool connect() {
-                clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+                int sock = socket(AF_INET, SOCK_STREAM, 0);
+                clientSocket = std::make_unique<SocketGuard>(sock);
 
-                sockaddr_in serverAddr;
+                if (!clientSocket->is_valid()) {
+                        std::lock_guard<std::mutex> lock(coutMutex);
+                        std::cerr << "Erro ao criar socket" << std::endl;
+                        return false;
+                }
+
+                sockaddr_in serverAddr{};
                 serverAddr.sin_family = AF_INET;
                 serverAddr.sin_port = htons(serverPort);
                 inet_pton(AF_INET, serverIP.c_str(), &serverAddr.sin_addr);
 
-                if (::connect(clientSocket, (sockaddr *)&serverAddr, sizeof(serverAddr)) <
-                    0) {
+                if (::connect(clientSocket->get(), (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
                         std::lock_guard<std::mutex> lock(coutMutex);
                         std::cerr << "Erro ao conectar ao servidor" << std::endl;
                         return false;
@@ -38,13 +59,13 @@ public:
 
                 {
                         std::lock_guard<std::mutex> lock(coutMutex);
-                        std::cout << "Conectado ao servidor " << serverIP << ":" << serverPort
-                                  << std::endl;
+                        std::cout << "Conectado ao servidor " << serverIP << ":" << serverPort << std::endl;
                 }
 
-                // Iniciar thread para receber mensagens
-                std::thread receiveThread(&TCPChatClient::receiveMessages, this);
-                receiveThread.detach();
+                running = true;
+
+                // Criar thread com smart pointer
+                receiveThread = std::make_unique<std::thread>(&TCPChatClient::receiveMessages, this);
 
                 return true;
         }
@@ -52,13 +73,18 @@ public:
         void receiveMessages() {
                 std::string acc;
                 char buf[1024];
-                while (true) {
-                        int n = recv(clientSocket, buf, sizeof(buf), 0);
+
+                while (running) {
+                        int n = recv(clientSocket->get(), buf, sizeof(buf), 0);
                         if (n <= 0) {
-                                std::lock_guard<std::mutex> lock(coutMutex);
-                                std::cout << "Desconectado do servidor" << std::endl;
+                                {
+                                        std::lock_guard<std::mutex> lock(coutMutex);
+                                        std::cout << "\nDesconectado do servidor" << std::endl;
+                                }
+                                running = false;
                                 break;
                         }
+
                         acc.append(buf, n);
 
                         size_t pos;
@@ -66,24 +92,26 @@ public:
                                 std::string line = acc.substr(0, pos);
                                 acc.erase(0, pos + 1);
 
-                                // opcional: remover \r
-                                if (!line.empty() && line.back() == '\r')
+                                if (!line.empty() && line.back() == '\r') {
                                         line.pop_back();
+                                }
 
-                                // evita imprimir linhas vazias quando há \n\n
                                 if (!line.empty()) {
                                         std::lock_guard<std::mutex> lock(coutMutex);
+                                        std::cout << "\r" << std::string(50, ' ') << "\r";
                                         std::cout << line << std::endl;
+                                        std::cout << "> " << std::flush;
                                 }
                         }
                 }
         }
 
-        void sendMessage(const std::string &message) {
+        void sendMessage(const std::string& message) {
                 std::string out = message;
-                if (out.empty() || out.back() != '\n')
+                if (out.empty() || out.back() != '\n') {
                         out.push_back('\n');
-                send(clientSocket, out.data(), out.size(), 0);
+                }
+                send(clientSocket->get(), out.data(), out.size(), 0);
         }
 
         void start() {
@@ -91,36 +119,67 @@ public:
                         return;
 
                 std::string message;
+                bool firstMessage = true;
+
                 {
                         std::lock_guard<std::mutex> lock(coutMutex);
-                        std::cout << "Digite mensagens (ou 'sair' para encerrar):" << std::endl;
+                        std::cout << "\n=== Chat TCP ===" << std::endl;
+                        std::cout << "Digite suas mensagens abaixo." << std::endl;
+                        std::cout << "Comandos: 'sair' para encerrar" << std::endl;
+                        std::cout << "================\n"
+                                  << std::endl;
                 }
 
-                while (true) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+                while (running) {
+                        if (firstMessage) {
+                                firstMessage = false;
+                        } else {
+                                std::lock_guard<std::mutex> lock(coutMutex);
+                                std::cout << "> " << std::flush;
+                        }
+
                         std::getline(std::cin, message);
 
-                        if (message == "sair") {
+                        if (!running)
+                                break;
+
+                        if (message == "sair" || message == "exit" || message == "quit") {
+                                {
+                                        std::lock_guard<std::mutex> lock(coutMutex);
+                                        std::cout << "Encerrando..." << std::endl;
+                                }
+                                running = false;
                                 break;
                         }
 
-                        sendMessage(message);
+                        if (!message.empty()) {
+                                sendMessage(message);
+                        }
                 }
 
-                close(clientSocket);
+                // Socket e thread fecham automaticamente (RAII)
         }
 };
 
-int main(int argc, char *argv[]) {
-        std::string serverIP = "127.0.0.1";
-        int serverPort = 8080;
+int main(int argc, char* argv[]) {
+        try {
+                std::string serverIP = "127.0.0.1";
+                int serverPort = 8080;
 
-        if (argc >= 2)
-                serverIP = argv[1];
-        if (argc >= 3)
-                serverPort = std::stoi(argv[2]);
+                if (argc >= 2)
+                        serverIP = argv[1];
+                if (argc >= 3)
+                        serverPort = std::stoi(argv[2]);
 
-        TCPChatClient client(serverIP, serverPort);
-        client.start();
+                TCPChatClient client(serverIP, serverPort);
+                client.start();
+
+        } catch (const std::exception& e) {
+                std::cerr << "Erro fatal: " << e.what() << std::endl;
+                return 1;
+        }
 
         return 0;
 }
