@@ -112,7 +112,7 @@ A IA também sugeriu usar `std::lock_guard` ao invés de lock/unlock manual, seg
 
 ```cpp
 void broadcastMessage(const std::string& message, int senderSocket) {
-    std::lock_guard<std::mutex> lock(clientsMutex);  // ✅ Região crítica protegida
+    std::lock_guard<std::mutex> lock(clientsMutex);  // Região crítica protegida
     
     for (int socket : clientSockets) {
         if (socket != senderSocket) {
@@ -126,12 +126,12 @@ void broadcastMessage(const std::string& message, int senderSocket) {
 
 ```cpp
 // tcp_client.cpp
-static std::mutex coutMutex;  // ✅ Mutex global para cout
+static std::mutex coutMutex;  // Mutex global para cout
 
 void receiveMessages() {
     // ...
     {
-        std::lock_guard<std::mutex> lock(coutMutex);  // ✅ Atomicidade
+        std::lock_guard<std::mutex> lock(coutMutex);  // Atomicidade
         std::cout << buffer << std::endl;
     }
 }
@@ -178,7 +178,7 @@ Esta análise demonstrou conhecimento profundo de redes TCP/IP, não apenas de c
 void sendMessage(const std::string& message) {
     std::string out = message;
     if (out.empty() || out.back() != '\n') {
-        out.push_back('\n');  // ✅ Garante delimitador
+        out.push_back('\n');  // Garante delimitador
     }
     send(clientSocket, out.data(), out.size(), 0);
 }
@@ -188,7 +188,7 @@ void sendMessage(const std::string& message) {
 
 ```cpp
 void receiveMessages() {
-    std::string acc;  // ✅ Buffer acumulado
+    std::string acc;  // Buffer acumulado
     char buf[1024];
     
     while (true) {
@@ -196,11 +196,11 @@ void receiveMessages() {
         acc.append(buf, n);
         
         size_t pos;
-        while ((pos = acc.find('\n')) != std::string::npos) {  // ✅ Parsing por linha
+        while ((pos = acc.find('\n')) != std::string::npos) {  // Parsing por linha
             std::string line = acc.substr(0, pos);
             acc.erase(0, pos + 1);
             
-            std::cout << line << std::endl;  // ✅ Mensagem completa
+            std::cout << line << std::endl;  // Mensagem completa
         }
     }
 }
@@ -230,7 +230,7 @@ A IA forneceu uma implementação de **monitor** (padrão de design para concorr
 class MessageHistory {
 private:
     std::deque<HistoryEntry> messages;
-    mutable std::mutex historyMutex;  // ✅ mutable para métodos const
+    mutable std::mutex historyMutex;  // mutable para métodos const
     
 public:
     void addMessage(const std::string& msg, int sender) {
@@ -240,7 +240,7 @@ public:
     }
     
     std::vector<std::string> getRecentMessages(size_t count) const {
-        std::lock_guard<std::mutex> lock(historyMutex);  // ✅ Funciona com const
+        std::lock_guard<std::mutex> lock(historyMutex);  // Funciona com const
         // ...
     }
 };
@@ -321,7 +321,7 @@ Este problema foi identificado **pelo aluno** durante revisão de código, não 
 void log(const std::string& message) {
     std::unique_lock<std::mutex> lock(bufferMutex);
     
-    // ✅ Espera até haver espaço no buffer (backpressure)
+    // Espera até haver espaço no buffer (backpressure)
     bufferCV.wait(lock, [this]() {
         return logBuffer.size() < maxBufferSize || shutdownFlag;
     });
@@ -378,7 +378,7 @@ class Barrier {
         std::unique_lock<std::mutex> lock(mtx);
         count++;
         if (count >= threshold) {
-            cv.notify_all();  // ✅ Libera todas as threads
+            cv.notify_all();  // Libera todas as threads
         } else {
             cv.wait(lock, [this]() { return count >= threshold; });
         }
@@ -423,7 +423,7 @@ public:
     
     ~SocketGuard() {
         if (!released && socket_fd >= 0) {
-            close(socket_fd);  // ✅ Automático
+            close(socket_fd);  // Automático
         }
     }
     
@@ -544,11 +544,11 @@ make stress-test  # 10 clientes simultâneos
 
 **Resultados:**
 
-- ✅ 10 conexões aceitas
-- ✅ 20 mensagens processadas (2 por cliente)
-- ✅ 0 race conditions detectadas
-- ✅ 0 deadlocks
-- ✅ Logs consistentes
+- 10 conexões aceitas
+- 20 mensagens processadas (2 por cliente)
+- 0 race conditions detectadas
+- 0 deadlocks
+- Logs consistentes
 
 
 ### 7.2 Análise de Logs
