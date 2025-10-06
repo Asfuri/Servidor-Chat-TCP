@@ -209,7 +209,7 @@ test-tcp: $(TCP_SERVER) $(TCP_CLIENT) setup
 
 # Teste de stress com logs organizados
 stress-test: $(TCP_SERVER) $(SYNC_TEST) setup
-	@echo "⚡ Teste com SINCRONIZAÇÃO via Barrier (condition_variable)"
+	@echo "⚡ Teste com sincronização via Barrier (condition_variable)"
 	@echo "📁 Logs em: $(LOG_DIR)/"
 	@./$(TCP_SERVER) > $(LOG_DIR)/server_sync.log 2>&1 & echo $$! > $(LOG_DIR)/server.pid
 	@sleep 1  # Apenas para servidor subir
