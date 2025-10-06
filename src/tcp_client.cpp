@@ -8,17 +8,18 @@
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
+#include <csignal>
 
 // Mutex global para proteger std::cout
 static std::mutex coutMutex;
 
 class TCPChatClient {
 private:
-        std::unique_ptr<SocketGuard> clientSocket; // Smart pointer para socket
+        std::unique_ptr<SocketGuard> clientSocket;
         std::string serverIP;
         int serverPort;
         bool running;
-        std::unique_ptr<std::thread> receiveThread; // Smart pointer para thread
+        std::unique_ptr<std::thread> receiveThread;
 
 public:
         TCPChatClient(const std::string& ip = "127.0.0.1", int port = 8080)
@@ -27,6 +28,10 @@ public:
 
         ~TCPChatClient() {
                 running = false;
+
+                if (clientSocket && clientSocket->is_valid()) {
+                        shutdown(clientSocket->get(), SHUT_RDWR);
+                }
 
                 // Aguardar thread terminar
                 if (receiveThread && receiveThread->joinable()) {
@@ -82,7 +87,7 @@ public:
                                         std::cout << "\nDesconectado do servidor" << std::endl;
                                 }
                                 running = false;
-                                break;
+                                kill(getpid(), SIGTERM);
                         }
 
                         acc.append(buf, n);
@@ -125,7 +130,7 @@ public:
                         std::lock_guard<std::mutex> lock(coutMutex);
                         std::cout << "\n=== Chat TCP ===" << std::endl;
                         std::cout << "Digite suas mensagens abaixo." << std::endl;
-                        std::cout << "Comandos: 'sair' para encerrar" << std::endl;
+                        std::cout << "Comando 'sair' para encerrar" << std::endl;
                         std::cout << "================\n"
                                   << std::endl;
                 }
@@ -139,8 +144,8 @@ public:
                                 std::lock_guard<std::mutex> lock(coutMutex);
                                 std::cout << "> " << std::flush;
                         }
-
-                        std::getline(std::cin, message);
+                        if (running)
+                                std::getline(std::cin, message);
 
                         if (!running)
                                 break;
@@ -151,6 +156,7 @@ public:
                                         std::cout << "Encerrando..." << std::endl;
                                 }
                                 running = false;
+                                sendMessage("DISCONNECT");
                                 break;
                         }
 
@@ -159,7 +165,10 @@ public:
                         }
                 }
 
-                // Socket e thread fecham automaticamente (RAII)
+                // Aguardar um pouco para mensagens pendentes
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+                // Socket e thread fecham automaticamente (RAII via destrutor)
         }
 };
 

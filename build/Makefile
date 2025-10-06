@@ -1,7 +1,3 @@
-# Makefile para Servidor de Chat TCP - Etapa 2 (com pasta de logs) - CORRIGIDO
-# Projeto: Programação Concorrente C++
-# Data: 03/10/2025
-
 # ==============================================================================
 # CONFIGURAÇÕES DO COMPILADOR
 # ==============================================================================
@@ -142,8 +138,7 @@ run-test: $(TEST_LIBTSLOG) setup
 run-server: $(TCP_SERVER) setup
 	@echo "🚀 Iniciando servidor TCP na porta 8080..."
 	@echo "📝 Logs do servidor em: $(SERVER_LOG)"
-	@echo "💡 Para parar: Ctrl+C"
-	@echo "💡 Para conectar: use './$(TCP_CLIENT)' em outro terminal"
+	@echo "💡 Para conectar: use 'make run-client' em outro terminal"
 	@echo "========================================="
 	./$(TCP_SERVER)
 
@@ -287,7 +282,7 @@ clean-logs:
 # Limpeza completa (mantém pasta logs vazia)
 clean: clean-obj
 	@echo "🧹 Limpando executáveis..."
-	rm -f $(TEST_LIBTSLOG) $(TCP_SERVER) $(TCP_CLIENT)
+	rm -f $(TEST_LIBTSLOG) $(TCP_SERVER) $(TCP_CLIENT) $(SYNC_TEST)
 	@$(MAKE) clean-logs
 	@echo "✅ Limpeza completa ($(LOG_DIR)/ mantido vazio)"
 
@@ -352,7 +347,7 @@ debug-logs: setup
 
 # Exibe informações do projeto
 info: setup
-	@echo "📋 INFORMAÇÕES DO PROJETO - ETAPA 2"
+	@echo "📋 INFORMAÇÕES DO PROJETO"
 	@echo "===================================="
 	@echo "Estrutura de diretórios:"
 	@echo "  $(SRC_DIR)/     - Código fonte"
@@ -369,32 +364,33 @@ info: setup
 
 # Ajuda completa
 help:
-	@echo "🚀 MAKEFILE - SERVIDOR DE CHAT TCP (ETAPA 2)"
+	@echo "🚀 MAKEFILE - SERVIDOR DE CHAT TCP"
 	@echo "============================================="
 	@echo ""
 	@echo "📦 COMPILAÇÃO:"
-	@echo "  all              - Compila todos os executáveis"
-	@echo "  setup            - Cria diretórios necessários"
+	@echo "  all              	- Compila todos os executáveis"
+	@echo "  setup            	- Cria diretórios necessários"
 	@echo ""
 	@echo "▶️  EXECUÇÃO:"
-	@echo "  run-test         - Executa teste da libtslog"
-	@echo "  run-server       - Inicia servidor TCP (porta 8080)"
-	@echo "  run-client       - Inicia cliente TCP"
+	@echo "  run-test         	- Executa teste da libtslog"
+	@echo "  run-server      	 - Inicia servidor TCP (porta 8080)"
+	@echo "  run-client      	 - Inicia cliente TCP"
+	@echo "  run-client-custom	- Inicia cliente TCP customizado"
 	@echo ""
 	@echo "🧪 TESTES:"
-	@echo "  test-tcp         - Teste automatizado completo"
-	@echo "  stress-test      - Teste de stress (10 clientes)"
+	@echo "  test-tcp       	  - Teste automatizado completo"
+	@echo "  stress-test    	  - Teste de stress"
 	@echo ""
 	@echo "📊 LOGS:"
-	@echo "  logs-summary     - Resumo de todos os logs"
-	@echo "  logs-tail        - Monitora logs em tempo real"
-	@echo "  debug-logs       - Análise detalhada dos logs"
-	@echo "  clean-logs       - Remove apenas logs"
+	@echo "  logs-summary    	 - Resumo de todos os logs"
+	@echo "  logs-tail     	   - Monitora logs em tempo real"
+	@echo "  debug-logs     	  - Análise detalhada dos logs"
+	@echo "  clean-logs     	  - Remove apenas logs"
 	@echo ""
 	@echo "🧹 LIMPEZA:"
-	@echo "  clean            - Remove executáveis e logs"
-	@echo "  clean-obj        - Remove apenas objetos"
-	@echo "  clean-all        - Limpeza total (remove pasta logs)"
+	@echo "  clean         	  	- Remove executáveis e logs"
+	@echo "  clean-obj        	- Remove apenas objetos"
+	@echo "  clean-all       	 - Limpeza total (remove pasta logs)"
 	@echo ""
 	@echo "📁 TODOS OS LOGS FICAM EM: $(LOG_DIR)/"
 	@echo "   $(TEST_LOG)    - Teste da biblioteca"

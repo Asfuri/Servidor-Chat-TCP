@@ -2,9 +2,14 @@
 #include "../lib/message_history.h"
 #include "../lib/socket_guard.h"
 #include <algorithm>
+#include <arpa/inet.h>
+#include <atomic>
+#include <csignal>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <netinet/in.h>
+#include <string>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
@@ -32,14 +37,89 @@ private:
         std::mutex clientsMutex;
         int nextClientId = 1;
 
+        std::atomic<bool> running{true};
+
 public:
         TCPChatServer(int p = 8080) : port(p), messageHistory(100) {
         }
 
         ~TCPChatServer() {
-                // RAII: Cleanup automático
+                shutdown();
+        }
+
+        void shutdown() {
+                if (!running.exchange(false)) {
+                        return; // Já foi encerrado
+                }
+
+                logger.log("Servidor encerrando...");
+
+                // Desconectar todos os clientes
+                {
+                        std::lock_guard<std::mutex> lock(clientsMutex);
+                        for (auto& client : clients) {
+                                if (client->socket >= 0) {
+                                        ::shutdown(client->socket, SHUT_RDWR);
+                                        close(client->socket);
+                                }
+                        }
+                        clients.clear();
+                }
+
+                // Fechar socket do servidor
                 if (serverSocket >= 0) {
+                        ::shutdown(serverSocket, SHUT_RDWR);
                         close(serverSocket);
+                        serverSocket = -1;
+                }
+
+                logger.log("Servidor encerrado");
+                        std::cout << "\n✅ Servidor encerrado" << std::endl;
+        }
+
+        void commandLoop() {
+                std::cout << "\n=== Servidor TCP Iniciado ===" << std::endl;
+                std::cout << "Digite 'sair' para encerrar o servidor" << std::endl;
+                std::cout << "Digite 'help' para comandos" << std::endl;
+                std::cout << "É interessante o uso de 'make logs-tail' para ver os logs do servidor" << std::endl;
+                std::cout << "'make help' para ver todos os comandos de make" << std::endl;
+                std::cout << "============================\n"
+                          << std::endl;
+
+                        std::string command;
+
+                while (running) {
+                        std::cout << "[servidor] > " << std::flush;
+
+
+                        if (!std::getline(std::cin, command) || std::cin.eof()) {
+                                // Sem stdin (modo background): sai só da thread de comandos
+                                logger.log("Entrada padrão indisponível - executando sem console");
+                                return; // não altera 'running'
+                            }
+
+                        if (!running)
+                                break;
+
+                        if (command.empty())
+                                continue;
+                        
+                        if (command == "sair") {
+                                std::cout << "Encerrando servidor..." << std::endl;
+                                shutdown();
+                                break;
+                        } else if (command == "status") {
+                                std::lock_guard<std::mutex> lock(clientsMutex);
+                                std::cout << "Clientes conectados: " << clients.size() << std::endl;
+                                std::cout << "Mensagens no histórico: " << messageHistory.size() << std::endl;
+                        } else if (command == "help") {
+                                std::cout << "Comandos disponíveis:" << std::endl;
+                                std::cout << "  status   - Mostra número de clientes conectados" << std::endl;
+                                std::cout << "  sair - Encerra o servidor" << std::endl;
+                                std::cout << "  help     - Mostra esta mensagem" << std::endl;
+                        } else if (!command.empty()) {
+                                std::cout << "Comando desconhecido. Digite 'help' para ver comandos." << std::endl;
+                        }
                 }
         }
 
@@ -72,37 +152,79 @@ public:
                 }
 
                 listen(serverSock.get(), 10);
-                logger.log("Servidor ouvindo conexões...");
+                logger.log("Servidor ouvindo conexões na porta " + std::to_string(port));
 
                 // Liberar o socket para uso contínuo
                 serverSocket = serverSock.release();
 
-                // Loop principal
-                while (true) {
+                std::thread commandThread(&TCPChatServer::commandLoop, this);
+                commandThread.detach();
+
+                // Loop principal de accept
+                while (running) {
                         sockaddr_in clientAddr{};
                         socklen_t clientLen = sizeof(clientAddr);
+
+                        fd_set readfds;
+                        FD_ZERO(&readfds);
+                        FD_SET(serverSocket, &readfds);
+
+                        struct timeval tv;
+                        tv.tv_sec = 1; // Timeout de 1 segundo
+                        tv.tv_usec = 0;
+
+                        int activity = select(serverSocket + 1, &readfds, NULL, NULL, &tv);
+
+                        if (activity < 0) {
+                                if (running) {
+                                        logger.log("ERRO: Select falhou");
+                                }
+                                break;
+                        }
+
+                        if (activity == 0) {
+                                // Timeout - continua loop para verificar running
+                                continue;
+                        }
+
                         int clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientLen);
 
-                        if (clientSocket > 0) {
-                                int clientId = nextClientId++;
-                                logger.log("Cliente " + std::to_string(clientId) + " conectado (socket: " + std::to_string(clientSocket) + ")");
-
-                                // Criar ClientInfo com smart pointer
-                                auto client = std::make_shared<ClientInfo>(clientSocket, clientId);
-
-                                {
-                                        std::lock_guard<std::mutex> lock(clientsMutex);
-                                        clients.push_back(client);
+                        if (clientSocket < 0) {
+                                if (running) {
+                                        logger.log("ERRO: Accept falhou");
                                 }
-
-                                // Enviar histórico
-                                sendHistoryToClient(clientSocket);
-
-                                // Criar thread com lambda capturando shared_ptr por valor
-                                client->thread = std::make_unique<std::thread>(
-                                    [this, client]() { handleClient(client); });
-                                client->thread->detach();
+                                continue;
                         }
+
+                        if (!running) {
+                                close(clientSocket);
+                                break;
+                        }
+
+                        int clientId = nextClientId++;
+                        logger.log("Cliente " + std::to_string(clientId) + " conectado (socket: " + std::to_string(clientSocket) + ")");
+
+                        // Criar ClientInfo com smart pointer
+                        auto client = std::make_shared<ClientInfo>(clientSocket, clientId);
+
+                        {
+                                std::lock_guard<std::mutex> lock(clientsMutex);
+                                clients.push_back(client);
+                        }
+
+                        // Enviar histórico
+                        sendHistoryToClient(clientSocket);
+
+                        // Criar thread com lambda
+                        client->thread = std::make_unique<std::thread>(
+                            [this, client]() { handleClient(client); });
+                        client->thread->detach();
+                }
+
+                logger.log("Loop principal do servidor encerrado");
+
+                if (commandThread.joinable()) {
+                        commandThread.join();
                 }
         }
 
@@ -111,15 +233,15 @@ private:
                 // RAII: Socket fechado automaticamente ao sair do escopo
                 SocketGuard sockGuard(client->socket);
 
-                logger.log("Thread iniciada para Cliente " + std::to_string(client->clientId) + " (socket: " + std::to_string(sockGuard.get()) + ")");
+                logger.log("Thread iniciada para Cliente " + std::to_string(client->clientId));
 
                 char buffer[1024];
 
-                while (true) {
+                while (running) {
                         int bytesRead = recv(sockGuard.get(), buffer, sizeof(buffer) - 1, 0);
 
                         if (bytesRead <= 0) {
-                                logger.log("Cliente " + std::to_string(client->clientId) + " desconectado (socket: " + std::to_string(sockGuard.get()) + ")");
+                                logger.log("Cliente " + std::to_string(client->clientId) + " desconectado");
                                 removeClient(sockGuard.get());
                                 break;
                         }
@@ -135,13 +257,11 @@ private:
                         if (message.empty())
                                 continue;
 
-                        logger.log("Mensagem recebida do Cliente " + std::to_string(client->clientId) + " (socket: " + std::to_string(sockGuard.get()) + "): " + message);
+                        logger.log("Mensagem recebida do Cliente " + std::to_string(client->clientId) + ": " + message);
 
                         // Retransmitir
                         broadcastMessage(message, sockGuard.get());
                 }
-
-                // Socket fecha automaticamente aqui (RAII)
         }
 
         void broadcastMessage(const std::string& message, int senderSocket) {
@@ -196,7 +316,6 @@ private:
         void removeClient(int clientSocket) {
                 std::lock_guard<std::mutex> lock(clientsMutex);
 
-                // Usar remove_if com lambda
                 clients.erase(
                     std::remove_if(clients.begin(), clients.end(),
                                    [clientSocket](const auto& client) {
